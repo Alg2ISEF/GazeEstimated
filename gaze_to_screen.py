@@ -42,11 +42,18 @@ def gaze_to_screen_mm(origin_mm, gaze_vec):
     """
     o = np.asarray(origin_mm, dtype=float)
     d = np.asarray(gaze_vec, dtype=float)
-    d = d / np.linalg.norm(d)
+    if o.size < 3 or d.size < 3 or not np.all(np.isfinite(o)) or not np.all(np.isfinite(d)):
+        return None
+    norm = np.linalg.norm(d)
+    if not np.isfinite(norm) or norm < 1e-8:
+        return None
+    d = d / norm
     if d[2] >= -1e-6:          # not pointing back toward the camera plane
         return None
     t = -o[2] / d[2]
     hit = o + t * d
+    if not np.all(np.isfinite(hit)):
+        return None
     return float(hit[0]), float(hit[1])
 
 
