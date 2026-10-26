@@ -40,6 +40,53 @@ WIN = "gaze"
 SET = {"res": (1920, 1080), "invert": False, "show_background": True, "calib_only": False}
 
 
+def gaze_to_screen_space(center_mm, gaze_vec, res=None, geometry=None):
+    """Return the current gaze point in screen coordinates (x, y) in pixels."""
+    if res is None:
+        res = SET["res"]
+    if geometry is None:
+        geometry = ScreenGeometry.laptop(res, (350.0, 200.0), cam_to_top_mm=10.0)
+
+    center = np.asarray(center_mm, dtype=np.float64).reshape(-1)
+    gaze = np.asarray(gaze_vec, dtype=np.float64).reshape(-1)
+    if center.size < 3:
+        center = np.pad(center, (0, max(0, 3 - center.size)))
+    if gaze.size < 3:
+        gaze = np.pad(gaze, (0, max(0, 3 - gaze.size)))
+    center = center[:3]
+    gaze = gaze[:3]
+
+    if not np.all(np.isfinite(center)) or not np.all(np.isfinite(gaze)):
+        return None
+    if np.linalg.norm(center) < 10.0:
+        center = center * 1000.0
+
+    geo_px = geometry.ray_to_pixel(center, gaze)
+    if geo_px is not None and np.all(np.isfinite(geo_px)):
+        px = np.asarray(geo_px, dtype=np.float64)
+        lo = np.array([0.0, 0.0], dtype=np.float64)
+        hi = np.array([res[0] - 1, res[1] - 1], dtype=np.float64)
+        return tuple(float(v) for v in np.clip(px, lo, hi))
+
+    hit = gaze_to_screen_mm(center, gaze)
+    if hit is None or not np.all(np.isfinite(hit)):
+        return None
+    hit = np.asarray(hit, dtype=np.float64)
+    lo = np.array([0.0, 0.0], dtype=np.float64)
+    hi = np.array([res[0] - 1, res[1] - 1], dtype=np.float64)
+    return tuple(float(v) for v in np.clip(hit, lo, hi))
+
+
+def current_screen_gaze(demo):
+    """Return the live gaze point in screen pixels from a running LiveDemo instance."""
+    if demo is None:
+        return None
+    hit, _ = demo._measure()
+    if hit is None:
+        return None
+    return tuple(float(v) for v in np.asarray(hit, dtype=np.float64))
+
+
 def detect_screen_size(default):
     try:
         import tkinter
@@ -174,7 +221,7 @@ class LiveDemo(Demo):
             cropped_center = np.asarray(cropped_face.center, dtype=np.float32).reshape(-1)
             if cropped_center.size >= 2:
                 cropped_center = cropped_center - np.array([x0, y0], dtype=np.float32)
-            else:
+            else:   
                 cropped_center = np.array([float(crop_w) / 2.0, float(crop_h) / 2.0], dtype=np.float32)
             cropped_face.center = cropped_center[:2]
         if hasattr(cropped_face, "bbox"):
@@ -190,6 +237,13 @@ class LiveDemo(Demo):
             cropped_face.landmarks = landmarks
         return crop, cropped_face
 
+
+    def get_screen_gaze(self):
+        """Public helper: use the live camera to estimate the current gaze and return screen coords."""
+        hit, _ = self._measure()
+        if hit is None:
+            return None
+        return tuple(float(v) for v in np.asarray(hit, dtype=np.float64))
 
     def _measure(self):
         t0 = time.perf_counter()
@@ -219,7 +273,7 @@ class LiveDemo(Demo):
             gaze_vec = np.pad(gaze_vec, (0, max(0, 3 - gaze_vec.size)))
         face.gaze_vector = gaze_vec[:3]
         t4 = time.perf_counter()
-        self._tick(read=t1 - t0, undistort=t2 - t1, detect=t3 - t2, gaze=t4 - t3)
+        self._tick(read=t1 -d t0, undistort=t2 - t1, detect=t3 - t2, gaze=t4 - t3)
         center = np.asarray(getattr(face, "center", np.zeros(3)), dtype=float).reshape(-1)
         if center.size < 3:
             center = np.pad(center, (0, max(0, 3 - center.size)))
@@ -235,19 +289,10 @@ class LiveDemo(Demo):
         if SET["invert"]:
             gaze = -gaze
 
-        # Prefer the geometric camera-to-screen ray intersection when available.
-        geo_px = self.screen_geo.ray_to_pixel(center, gaze)
-        if geo_px is not None and np.all(np.isfinite(geo_px)):
-            px = np.asarray(geo_px, dtype=float)
-            px = np.clip(px, [0, 0], [SET["res"][0] - 1, SET["res"][1] - 1])
-            return tuple(float(v) for v in px), ""
-
-        hit = gaze_to_screen_mm(center, gaze)
-        if hit is None:
-            return None, "gaze not pointing at screen plane (try --invert-gaze)"
-        if not np.all(np.isfinite(hit)):
-            return None, "gaze hit is not finite"
-        return hit, ""
+        px = gaze_to_screen_space(center, gaze, res=SET["res"], geometry=self.screen_geo)
+        if px is not None:
+            return px, ""
+        return None, "gaze not pointing at screen plane (try --invert-gaze)"
 
     # ---- calibration ---------------------------------------------------------
     def _calibrate(self):
