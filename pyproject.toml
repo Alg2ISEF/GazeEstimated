@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaze_estimated"
+version = "0.1.0"
+dependencies = [
+    "opencv-python",
+    "numpy",
+    "omegaconf",
+]
+
+[tool.setuptools]
+# List each python file name (without the .py extension) that you want to import globally
+py-modules = [
+    "gaze_streamer",
+    "gaze_smoother",
+    "gaze_to_screen",
+    "screen_mapping"
+]   

@@ -1,0 +1,14 @@
+README.md
+gaze_smoother.py
+gaze_streamer.py
+gaze_to_screen.py
+pyproject.toml
+screen_mapping.py
+gaze_estimated.egg-info/PKG-INFO
+gaze_estimated.egg-info/SOURCES.txt
+gaze_estimated.egg-info/dependency_links.txt
+gaze_estimated.egg-info/requires.txt
+gaze_estimated.egg-info/top_level.txt
+tests/test_calibration_sample_filter.py
+tests/test_face_detector_config.py
+tests/test_one_euro_filter.py
